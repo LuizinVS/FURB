@@ -1,69 +1,77 @@
 # RestAPIFurb
 
-API REST simples para avaliação de Programação Web II, com Spring Boot, JPA/Hibernate, PostgreSQL, JWT e Swagger.
+API REST JSON para cadastro de equipamentos, feita com Java 21, Spring Boot, JPA/PostgreSQL, Bean Validation, Spring Security, JWT e Swagger.
 
 ## 1. Requisitos
 
-- Java 21
-- Maven
-- PostgreSQL
+- Java 21 (`java -version`)
+- Maven 3.9+ (`mvn -version`)
+- PostgreSQL 14+
 
-## 2. Criar e configurar o PostgreSQL
+## 2. Banco PostgreSQL
 
-1. Crie um banco chamado `restapifurb`.
-2. O projeto usa o usuário `postgres` e a senha `postgres` por padrão.
-3. Se quiser, altere as variáveis de ambiente abaixo.
-
-Exemplo no PostgreSQL:
+Entre no `psql` como administrador e crie o banco (as tabelas serão criadas pelo Hibernate):
 
 ```sql
 CREATE DATABASE restapifurb;
 ```
 
+Por padrão, a aplicação usa `jdbc:postgresql://localhost:5432/restapifurb`, usuário `postgres` e senha `postgres`. Para outra configuração, use variáveis de ambiente.
+
 ## 3. Variáveis de ambiente
 
-O projeto já possui valores padrão para desenvolvimento, mas você pode sobrescrever:
+PowerShell (válidas para a janela atual):
 
-```bash
-set DB_PASSWORD=postgres
-set JWT_SECRET=meu-segredo-local
+```powershell
+$env:DB_URL="jdbc:postgresql://localhost:5432/restapifurb"
+$env:DB_USERNAME="postgres"
+$env:DB_PASSWORD="sua_senha"
+$env:JWT_SECRET="uma-chave-aleatoria-com-pelo-menos-32-caracteres"
 ```
 
-## 4. Como iniciar o projeto
+`JWT_EXPIRATION_MS` é opcional e vale 3.600.000 ms (uma hora) por padrão. Não versione senhas nem segredos reais. Os defaults em `application.properties` são apenas para desenvolvimento local.
 
-```bash
-mvn spring-boot:run
+## 4. Iniciar
+
+Na raiz do projeto:
+
+```powershell
+mvn clean spring-boot:run
 ```
 
-A aplicação ficará disponível em:
+Ou gere e execute o JAR:
 
-```text
-http://localhost:8080/RestAPIFurb/
+```powershell
+mvn clean package
+java -jar target/restapifurb-0.0.1-SNAPSHOT.jar
 ```
 
-## 5. URL base
+URL base: `http://localhost:8080/RestAPIFurb`
 
-```text
-http://localhost:8080/RestAPIFurb
-```
+Na primeira execução em um banco vazio são cadastrados os três tipos, os três equipamentos solicitados e o usuário `admin`/`admin123`. A senha é persistida como hash BCrypt e os dados não são duplicados a cada inicialização.
 
-## 6. Swagger
+## 5. Swagger
 
-A documentação Swagger estará disponível em:
+Abra `http://localhost:8080/RestAPIFurb/swagger-ui.html`. Faça login, copie apenas o valor de `token`, clique em **Authorize** e cole o token. O Swagger acrescenta `Bearer` automaticamente.
 
-```text
-http://localhost:8080/RestAPIFurb/swagger-ui.html
-```
+## 6. Endpoints e autenticação
 
-## 7. Como fazer login
+| Método | Endpoint | JWT | Resultado |
+|---|---|---:|---|
+| POST | `/auth/login` | Não | Gera token |
+| GET | `/equipamentos` | Não | Lista sob a propriedade raiz `equipamentos` |
+| GET | `/equipamentos/{id}` | Não | Busca por ID |
+| POST | `/equipamentos` | Sim | Cria e retorna `201 Created` |
+| PUT | `/equipamentos/{id}` | Sim | Atualização parcial |
+| DELETE | `/equipamentos/{id}` | Sim | Remove o item |
 
-Envie uma requisição para:
+## 7. Testes no Postman
 
-```http
-POST /auth/login
-```
+Defina uma variável de coleção `baseUrl` com `http://localhost:8080/RestAPIFurb`.
 
-Body:
+### Login
+
+`POST {{baseUrl}}/auth/login`, aba **Body > raw > JSON**:
 
 ```json
 {
@@ -72,129 +80,85 @@ Body:
 }
 ```
 
-Resposta:
+Copie o campo `token` da resposta. Nos endpoints protegidos, use **Authorization > Bearer Token** e cole o valor. Alternativamente, envie o header `Authorization: Bearer SEU_TOKEN`.
 
-```json
-{
-  "token": "..."
-}
+### Listar e buscar
+
+```text
+GET {{baseUrl}}/equipamentos
+GET {{baseUrl}}/equipamentos/1
 ```
 
-## 8. Como copiar o JWT
-
-Copie o valor retornado no campo `token` e envie no header:
-
-```http
-Authorization: Bearer SEU_TOKEN
-```
-
-## 9. Como chamar endpoints protegidos
-
-Exemplo com `curl`:
-
-```bash
-curl -X POST http://localhost:8080/RestAPIFurb/equipamentos \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SEU_TOKEN" \
-  -d '{"nome":"Impressora HP","tipo":{"id":3,"nome":"Impressora"}}'
-```
-
-## 10. Exemplos de JSON
-
-### GET /equipamentos
+A lista possui este formato:
 
 ```json
 {
   "equipamentos": [
-    {
-      "id": 1,
-      "nome": "Notebook Dell",
-      "tipo": {
-        "id": 1,
-        "nome": "Computador"
-      }
-    }
+    { "id": 1, "nome": "Notebook Dell", "tipo": { "id": 1, "nome": "Computador" } }
   ]
 }
 ```
 
-### POST /equipamentos
+### Criar (JWT obrigatório)
+
+`POST {{baseUrl}}/equipamentos`:
 
 ```json
 {
   "nome": "Imp HP",
-  "tipo": {
-    "id": 3,
-    "nome": "Impressora"
-  }
+  "tipo": { "id": 3, "nome": "Impressora" }
 }
 ```
 
-### PUT /equipamentos/{id} (atualização parcial)
+O servidor usa o `tipo.id` para associar um tipo já existente; o `nome` dentro de `tipo` é aceito no JSON, mas o nome oficial vem do banco.
+
+### Atualizar parcialmente (JWT obrigatório)
+
+`PUT {{baseUrl}}/equipamentos/1` para mudar somente o nome:
 
 ```json
-{
-  "nome": "Novo nome"
-}
+{ "nome": "Novo nome" }
 ```
 
-## 11. Arquitetura/pastas do projeto
+Ou somente o tipo:
+
+```json
+{ "tipo": { "id": 2 } }
+```
+
+Campos ausentes permanecem como estavam. Um corpo vazio, nome em branco ou tipo inexistente produz erro JSON apropriado.
+
+### Remover (JWT obrigatório)
+
+`DELETE {{baseUrl}}/equipamentos/1`. Resposta:
+
+```json
+{ "success": { "text": "equipamento removido" } }
+```
+
+## 8. Getters e setters
+
+Todas as entidades e DTOs possuem getters e setters explícitos, sem depender de Lombok. Isso permite que Jackson transforme o JSON do Postman em objetos Java e serialize as respostas. No Postman você não chama getters/setters: basta enviar os JSONs acima com `Content-Type: application/json`.
+
+## 9. Arquitetura
 
 ```text
 src/main/java/br/furb/restapifurb
-├── config
-├── controller
-├── dto
-├── exception
-├── model
-├── repository
-├── security
-└── service
+├── config       Security, OpenAPI e carga inicial
+├── controller   Recebe HTTP, valida e chama services
+├── dto          Objetos de entrada e saída da API
+├── exception    Exceções e tratamento global em JSON
+├── model        Entidades JPA Tipo, Equipamento e Usuario
+├── repository   Interfaces JpaRepository
+├── security     Filtro, geração/validação JWT e UserDetails
+└── service      Regras de negócio e transações
 ```
 
-## 12. Exemplos de chamadas manuais
+Decisões importantes para explicar: `ManyToOne` representa que vários equipamentos podem ter o mesmo tipo; DTOs evitam expor diretamente entidades; o DTO específico de PUT tem campos opcionais e o service altera somente os campos presentes; JWT torna a API stateless; BCrypt impede guardar senha em texto puro; `@RestControllerAdvice` centraliza erros; e `ddl-auto=update` cria/atualiza tabelas no PostgreSQL.
 
-### Listar equipamentos
+## 10. Verificação automatizada
 
-```bash
-curl http://localhost:8080/RestAPIFurb/equipamentos
-```
-
-### Buscar equipamento por ID
-
-```bash
-curl http://localhost:8080/RestAPIFurb/equipamentos/1
-```
-
-### Login
-
-```bash
-curl -X POST http://localhost:8080/RestAPIFurb/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
-```
-
-### Criar equipamento autenticado
-
-```bash
-curl -X POST http://localhost:8080/RestAPIFurb/equipamentos \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SEU_TOKEN" \
-  -d '{"nome":"Impressora HP","tipo":{"id":3,"nome":"Impressora"}}'
-```
-
-### Atualizar parcialmente autenticado
-
-```bash
-curl -X PUT http://localhost:8080/RestAPIFurb/equipamentos/1 \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SEU_TOKEN" \
-  -d '{"nome":"Notebook Atualizado"}'
-```
-
-### Excluir equipamento autenticado
-
-```bash
-curl -X DELETE http://localhost:8080/RestAPIFurb/equipamentos/1 \
-  -H "Authorization: Bearer SEU_TOKEN"
+```powershell
+mvn test
+mvn package
 ```

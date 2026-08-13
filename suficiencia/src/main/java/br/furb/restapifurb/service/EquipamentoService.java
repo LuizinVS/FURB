@@ -1,94 +1,40 @@
 package br.furb.restapifurb.service;
 
-import br.furb.restapifurb.dto.EquipamentoDTO;
-import br.furb.restapifurb.dto.EquipamentoUpdateDTO;
-import br.furb.restapifurb.dto.TipoDTO;
-import br.furb.restapifurb.exception.ResourceNotFoundException;
-import br.furb.restapifurb.model.Equipamento;
-import br.furb.restapifurb.model.Tipo;
-import br.furb.restapifurb.repository.EquipamentoRepository;
-import br.furb.restapifurb.repository.TipoRepository;
+import br.furb.restapifurb.dto.*;
+import br.furb.restapifurb.exception.*;
+import br.furb.restapifurb.model.*;
+import br.furb.restapifurb.repository.*;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 @Service
 public class EquipamentoService {
-
     private final EquipamentoRepository equipamentoRepository;
     private final TipoRepository tipoRepository;
-
-    public EquipamentoService(EquipamentoRepository equipamentoRepository, TipoRepository tipoRepository) {
-        this.equipamentoRepository = equipamentoRepository;
-        this.tipoRepository = tipoRepository;
-    }
-
-    public Map<String, Object> listarTodos() {
-        List<Equipamento> equipamentos = equipamentoRepository.findAll();
-        List<EquipamentoDTO> itens = equipamentos.stream().map(this::toDto).toList();
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("equipamentos", itens);
-        return response;
-    }
-
-    public EquipamentoDTO buscarPorId(Long id) {
-        Equipamento equipamento = equipamentoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Equipamento não encontrado"));
-        return toDto(equipamento);
-    }
-
+    public EquipamentoService(EquipamentoRepository equipamentoRepository, TipoRepository tipoRepository) { this.equipamentoRepository = equipamentoRepository; this.tipoRepository = tipoRepository; }
+    @Transactional(readOnly = true)
+    public List<EquipamentoResponseDTO> listar() { return equipamentoRepository.findAll().stream().map(this::paraDTO).toList(); }
+    @Transactional(readOnly = true)
+    public EquipamentoResponseDTO buscar(Long id) { return paraDTO(buscarEntidade(id)); }
     @Transactional
-    public EquipamentoDTO criar(EquipamentoDTO dto) {
+    public EquipamentoResponseDTO criar(EquipamentoRequestDTO dto) {
         Tipo tipo = buscarTipo(dto.getTipo().getId());
-        Equipamento equipamento = new Equipamento();
-        equipamento.setNome(dto.getNome());
-        equipamento.setTipo(tipo);
-        return toDto(equipamentoRepository.save(equipamento));
+        return paraDTO(equipamentoRepository.save(new Equipamento(dto.getNome().trim(), tipo)));
     }
-
     @Transactional
-    public EquipamentoDTO atualizar(Long id, EquipamentoUpdateDTO dto) {
-        Equipamento equipamento = equipamentoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Equipamento não encontrado"));
-
+    public EquipamentoResponseDTO atualizar(Long id, EquipamentoUpdateDTO dto) {
+        if (dto.getNome() == null && dto.getTipo() == null) throw new RequisicaoInvalidaException("Informe ao menos um campo para atualizar");
+        Equipamento equipamento = buscarEntidade(id);
         if (dto.getNome() != null) {
-            equipamento.setNome(dto.getNome());
+            if (dto.getNome().isBlank()) throw new RequisicaoInvalidaException("nome não pode estar em branco");
+            equipamento.setNome(dto.getNome().trim());
         }
-
-        if (dto.getTipo() != null) {
-            Tipo tipo = buscarTipo(dto.getTipo().getId());
-            equipamento.setTipo(tipo);
-        }
-
-        return toDto(equipamentoRepository.save(equipamento));
+        if (dto.getTipo() != null) equipamento.setTipo(buscarTipo(dto.getTipo().getId()));
+        return paraDTO(equipamentoRepository.save(equipamento));
     }
-
-    @Transactional
-    public Map<String, Object> remover(Long id) {
-        Equipamento equipamento = equipamentoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Equipamento não encontrado"));
-        equipamentoRepository.delete(equipamento);
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("success", Map.of("text", "equipamento removido"));
-        return response;
-    }
-
-    private Tipo buscarTipo(Long id) {
-        return tipoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Tipo não encontrado"));
-    }
-
-    private EquipamentoDTO toDto(Equipamento equipamento) {
-        EquipamentoDTO dto = new EquipamentoDTO();
-        dto.setId(equipamento.getId());
-        dto.setNome(equipamento.getNome());
-        TipoDTO tipoDto = new TipoDTO();
-        tipoDto.setId(equipamento.getTipo().getId());
-        tipoDto.setNome(equipamento.getTipo().getNome());
-        dto.setTipo(tipoDto);
-        return dto;
-    }
+    @Transactional public void remover(Long id) { equipamentoRepository.delete(buscarEntidade(id)); }
+    private Equipamento buscarEntidade(Long id) { return equipamentoRepository.findById(id).orElseThrow(() -> new RecursoNaoEncontradoException("Equipamento não encontrado: " + id)); }
+    private Tipo buscarTipo(Long id) { if (id == null) throw new RequisicaoInvalidaException("O id do tipo é obrigatório"); return tipoRepository.findById(id).orElseThrow(() -> new RecursoNaoEncontradoException("Tipo não encontrado: " + id)); }
+    private EquipamentoResponseDTO paraDTO(Equipamento e) { return new EquipamentoResponseDTO(e.getId(), e.getNome(), new TipoDTO(e.getTipo().getId(), e.getTipo().getNome())); }
 }

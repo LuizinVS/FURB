@@ -1,0 +1,2 @@
+package br.furb.restapifurb.exception;
+public class RequisicaoInvalidaException extends RuntimeException { public RequisicaoInvalidaException(String mensagem) { super(mensagem); } }

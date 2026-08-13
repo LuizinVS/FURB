@@ -1,55 +1,25 @@
 package br.furb.restapifurb.controller;
 
-import br.furb.restapifurb.dto.EquipamentoDTO;
-import br.furb.restapifurb.dto.EquipamentoUpdateDTO;
+import br.furb.restapifurb.dto.*;
 import br.furb.restapifurb.service.EquipamentoService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
+import java.net.URI;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-
-@RestController
-@RequestMapping("/equipamentos")
+@RestController @RequestMapping("/equipamentos")
 public class EquipamentoController {
-
-    private final EquipamentoService equipamentoService;
-
-    public EquipamentoController(EquipamentoService equipamentoService) {
-        this.equipamentoService = equipamentoService;
+    private final EquipamentoService service;
+    public EquipamentoController(EquipamentoService service) { this.service = service; }
+    @GetMapping public ResponseEntity<EquipamentosResponseDTO> listar() { return ResponseEntity.ok(new EquipamentosResponseDTO(service.listar())); }
+    @GetMapping("/{id}") public ResponseEntity<EquipamentoResponseDTO> buscar(@PathVariable Long id) { return ResponseEntity.ok(service.buscar(id)); }
+    @PostMapping public ResponseEntity<EquipamentoResponseDTO> criar(@Valid @RequestBody EquipamentoRequestDTO dto) {
+        EquipamentoResponseDTO criado = service.criar(dto);
+        return ResponseEntity.created(URI.create("/RestAPIFurb/equipamentos/" + criado.getId())).body(criado);
     }
-
-    @GetMapping
-    @Operation(summary = "Listar equipamentos")
-    public ResponseEntity<Map<String, Object>> listar() {
-        return ResponseEntity.ok(equipamentoService.listarTodos());
-    }
-
-    @GetMapping("/{id}")
-    @Operation(summary = "Buscar equipamento por ID")
-    public ResponseEntity<EquipamentoDTO> buscarPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(equipamentoService.buscarPorId(id));
-    }
-
-    @PostMapping
-    @Operation(summary = "Criar equipamento", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<EquipamentoDTO> criar(@Valid @RequestBody EquipamentoDTO dto) {
-        EquipamentoDTO criado = equipamentoService.criar(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(criado);
-    }
-
-    @PutMapping("/{id}")
-    @Operation(summary = "Atualizar equipamento parcialmente", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<EquipamentoDTO> atualizar(@PathVariable Long id, @RequestBody EquipamentoUpdateDTO dto) {
-        return ResponseEntity.ok(equipamentoService.atualizar(id, dto));
-    }
-
-    @DeleteMapping("/{id}")
-    @Operation(summary = "Remover equipamento", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<Map<String, Object>> remover(@PathVariable Long id) {
-        return ResponseEntity.ok(equipamentoService.remover(id));
+    @PutMapping("/{id}") public ResponseEntity<EquipamentoResponseDTO> atualizar(@PathVariable Long id, @Valid @RequestBody EquipamentoUpdateDTO dto) { return ResponseEntity.ok(service.atualizar(id, dto)); }
+    @DeleteMapping("/{id}") public ResponseEntity<Map<String, Map<String, String>>> remover(@PathVariable Long id) {
+        service.remover(id); return ResponseEntity.ok(Map.of("success", Map.of("text", "equipamento removido")));
     }
 }
